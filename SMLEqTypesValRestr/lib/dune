@@ -1,7 +1,7 @@
 (library
  (name SMLEqTypesValRestr_lib)
  (public_name SMLEqTypesValRestr.Lib)
- (modules Ast Parser)
+ (modules Ast Parser Typing Inferencer Interpreter)
  (libraries base angstrom)
  (preprocess
   (pps ppx_expect ppx_deriving.show))

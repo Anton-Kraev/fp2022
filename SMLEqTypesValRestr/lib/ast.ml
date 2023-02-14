@@ -51,7 +51,7 @@ type expr =
                                   in
                                     a + b
                                   end *)
-  | EApplication of expr * expr (* f(x, y) *)
+  | EApplication of expr * expr (* f x *)
   | EFunDec of id * id list * expr
     (* fun f x y = x + y
                                       fun factorial n = n * factorial (n - 1) *)
