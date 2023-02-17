@@ -1,6 +1,5 @@
 (** Copyright 2021-2022, Kakadu and contributors *)
 
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
-open Ast
 
-val parse : string -> expr
+val parse : string -> (Ast.expr, string) result
