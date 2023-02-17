@@ -22,40 +22,6 @@ type dispatch =
   ; expr_p : dispatch -> Ast.expr Angstrom.t
   }
 
-(* smart constructors for expressions *)
-let e_literal x = ELiteral x
-let e_identifier x = EIdentifier x
-let e_unary_op op x = EUnaryOp (op, x)
-let e_binary_op op left right = EBinaryOp (op, left, right)
-let e_tuple elements = ETuple elements
-let e_list elements = EList elements
-let e_cons_list head tail = EConsList (head, tail)
-let e_case_of expression cases = ECaseOf (expression, cases)
-let e_let_in declarations body = ELetIn (declarations, body)
-let e_application func args = EApplication (func, args)
-let e_fun_dec func_id args_id body = EFunDec (func_id, args_id, body)
-let e_value_dec value_id expression = EValueDec (value_id, expression)
-let e_arrow_fun args_id expression = EArrowFun (args_id, expression)
-let e_if_then_else cond if_true if_false = EIfThenElse (cond, if_true, if_false)
-
-(* smart constructors for binary operations *)
-let badd _ = Add
-let bsub _ = Sub
-let bmul _ = Mult
-let bdiv _ = Div
-let beq _ = Eq
-let bneq _ = NotEq
-let bls _ = Less
-let blse _ = LessOrEq
-let bgt _ = Greater
-let bgte _ = GreaterOrEq
-let band _ = And
-let bor _ = Or
-
-(* smart constructors for unary operations *)
-let uneg _ = Neg
-let unot _ = Not
-
 (* helper functions *)
 let is_space = function
   | ' ' | '\t' | '\n' | '\r' -> true
@@ -93,7 +59,7 @@ let varname =
 
 let id_of_expr = function
   | EIdentifier x -> return x
-  | _ -> failwith "TODO"
+  | _ -> failwith "Unreachable"
 ;;
 
 let literal_p =
@@ -227,7 +193,7 @@ let binary_op_p d =
     match op_parsers with
     | [ op ] -> chainl1 expr_parser op
     | h :: t -> chainl1 (parse_bin_op expr_parser t) h
-    | _ -> fail "TODO"
+    | _ -> fail "Unreachable"
   in
   parse_bin_op
     parse_content

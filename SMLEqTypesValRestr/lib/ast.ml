@@ -59,3 +59,37 @@ type expr =
   | EArrowFun of id list * expr (* fn x => x + 1 *)
   | EIfThenElse of expr * expr * expr (* if true then 1 else 0 *)
 [@@deriving show { with_path = false }]
+
+(* smart constructors for expressions *)
+let e_literal x = ELiteral x
+let e_identifier x = EIdentifier x
+let e_unary_op op x = EUnaryOp (op, x)
+let e_binary_op op left right = EBinaryOp (op, left, right)
+let e_tuple elements = ETuple elements
+let e_list elements = EList elements
+let e_cons_list head tail = EConsList (head, tail)
+let e_case_of expression cases = ECaseOf (expression, cases)
+let e_let_in declarations body = ELetIn (declarations, body)
+let e_application func args = EApplication (func, args)
+let e_fun_dec func_id args_id body = EFunDec (func_id, args_id, body)
+let e_value_dec value_id expression = EValueDec (value_id, expression)
+let e_arrow_fun args_id expression = EArrowFun (args_id, expression)
+let e_if_then_else cond if_true if_false = EIfThenElse (cond, if_true, if_false)
+
+(* binary operations *)
+let badd _ = Add
+let bsub _ = Sub
+let bmul _ = Mult
+let bdiv _ = Div
+let beq _ = Eq
+let bneq _ = NotEq
+let bls _ = Less
+let blse _ = LessOrEq
+let bgt _ = Greater
+let bgte _ = GreaterOrEq
+let band _ = And
+let bor _ = Or
+
+(* unary operations *)
+let uneg _ = Neg
+let unot _ = Not

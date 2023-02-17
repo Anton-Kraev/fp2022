@@ -1,15 +1,5 @@
 open Ast
 
-module type MONAD_ERROR = sig
-  type 'a t = ('a, string) result
-
-  val return : 'a -> 'a t
-  val fail : string -> 'a t
-  val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
-  val ( >>| ) : 'a t -> ('a -> 'b) -> 'b t
-  val ( let* ) : 'a t -> ('a -> 'b t) -> 'b t
-end
-
 type environment = (id, value, Base.String.comparator_witness) Base.Map.t
 
 and rec_flag =
@@ -39,13 +29,23 @@ type error =
   | `NonExhaustivePatternMatching (** Pattern-matching is not exhaustive *)
   ]
 
+module type MONAD_ERROR = sig
+  type 'a t = ('a, error) result
+
+  val return : 'a -> 'a t
+  val fail : error -> 'a t
+  val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
+  val ( >>| ) : 'a t -> ('a -> 'b) -> 'b t
+  val ( let* ) : 'a t -> ('a -> 'b t) -> 'b t
+end
+
 module Environment (M : MONAD_ERROR) = struct
   open M
 
   let find map key =
     match Base.Map.find map key with
     | Some value -> return value
-    | None -> fail (Printf.sprintf "%S not found" key)
+    | None -> fail @@ `UnboundValue key
   ;;
 
   let update environment key value = Base.Map.update environment key ~f:(fun _ -> value)
@@ -85,13 +85,13 @@ end = struct
        | Sub, VInt x, VInt y -> return @@ VInt (x - y)
        | Mult, VInt x, VInt y -> return @@ VInt (x * y)
        | Div, VInt x, VInt y ->
-         if y = 0 then fail "Division by zero" else return @@ VInt (x / y)
-       | (Add | Sub | Mult | Div), _, _ -> fail "Type mismatch"
-       (* And ( && ) *)
+         if y = 0 then fail `Division_by_zero else return @@ VInt (x / y)
+       | (Add | Sub | Mult | Div), _, _ -> fail `TypeMismatch
+       (* Logical operations *)
        | And, VBool x, VBool y -> return @@ VBool (x && y)
        | Or, VBool x, VBool y -> return @@ VBool (x || y)
-       | (And | Or), _, _ -> fail "Type mismatch"
-       (* Equality *)
+       | (And | Or), _, _ -> fail `TypeMismatch
+       (* Equality operations *)
        | op, arg1, arg2 ->
          let comparison_operation : 'a. 'a -> 'a -> bool =
            match op with
@@ -108,10 +108,10 @@ end = struct
           | VBool x, VBool y -> return @@ VBool (comparison_operation x y)
           | VChar x, VChar y -> return @@ VBool (comparison_operation x y)
           | VList x, VList y -> return @@ VBool (comparison_operation x y)
-          | _, _ -> fail "Unsupported operation"))
+          | _, _ -> fail `UnsupportedOperation))
     | EIdentifier name ->
       if name = "_"
-      then fail "Misused wildcard"
+      then fail `MisusedWildcard
       else
         let* v = find environment name in
         (match v with
@@ -125,12 +125,12 @@ end = struct
         match eval_function with
         | VFun (id_list, function_body, environment, recursive) ->
           return (id_list, function_body, environment, recursive)
-        | _ -> fail "Not a function"
+        | _ -> fail `NotAFunction
       in
       let* id, id_list =
         match id_list with
         | head :: tail -> return (head, tail)
-        | _ -> fail "Not a function"
+        | _ -> fail `NotAFunction
       in
       let environment =
         if id <> "_" then update local_environment id eval_argument else local_environment
@@ -152,13 +152,13 @@ end = struct
       (match eval_conditional with
        | VBool true -> eval true_branch environment
        | VBool false -> eval false_branch environment
-       | _ -> fail "Type mismatch")
+       | _ -> fail `TypeMismatch)
     | EUnaryOp (operator, operand) ->
       let* operand = eval operand environment in
       (match operator, operand with
        | Neg, VInt x -> return @@ VInt (-x)
        | Not, VBool x -> return @@ VBool (not x)
-       | _ -> fail "Type mismatch")
+       | _ -> fail `TypeMismatch)
     | EList list ->
       (match list with
        | [] -> return @@ VList []
@@ -173,7 +173,7 @@ end = struct
              let* tail = eval_list tail in
              (match tail with
               | VList tail -> return @@ VList (head :: tail)
-              | _ -> fail "Unreachable")
+              | _ -> fail `Unreachable)
          in
          eval_list list)
     | EConsList (operand, list) ->
@@ -181,7 +181,7 @@ end = struct
       let* list = eval list environment in
       (match operand, list with
        | x, VList list -> return @@ VList (x :: list)
-       | _ -> fail "Type mismatch")
+       | _ -> fail `TypeMismatch)
     | ETuple list ->
       let* list = foldr (fun x xs -> x :: xs) [] list in
       return @@ VTuple list
@@ -191,7 +191,7 @@ end = struct
           let* result = eval h environment in
           (match h with
            | EValueDec (name, _) -> eval_bindings (update environment name result) t
-           | _ -> fail "Unreachable")
+           | _ -> fail `Unreachable)
         | _ -> eval expression environment
       in
       eval_bindings environment bindings_list
@@ -213,7 +213,7 @@ end = struct
             let ( *> ) l r = l >>= fun _ -> r in
             result *> monadic_execution, new_environment, head_success && tail_success
           | [], [] -> eval action environment, environment, true
-          | _ -> fail "PatternMatchingFailed", environment, false
+          | _ -> fail `PatternMatchingFailed, environment, false
         in
         match matched_expression, case with
         | VInt value, ELiteral (LInt x) when value = x ->
@@ -249,8 +249,8 @@ end = struct
              in
              let ( *> ) l r = l >>= fun _ -> r in
              result *> monadic_execution, new_environment, head_success && tail_success
-           | [] -> fail "PatternMatchingFailed", environment, false)
-        | _ -> fail "PatternMatchingFailed", environment, false
+           | [] -> fail `PatternMatchingFailed, environment, false)
+        | _ -> fail `PatternMatchingFailed, environment, false
       in
       let* eval_matched_expression = eval matched_expression environment in
       let rec helper = function
@@ -259,7 +259,7 @@ end = struct
             compare_patterns eval_matched_expression (fst case) (snd case) environment
           in
           if success then result else helper tail
-        | [] -> fail "Non exhaustive pattern matching"
+        | [] -> fail `NonExhaustivePatternMatching
       in
       helper case_list
   ;;

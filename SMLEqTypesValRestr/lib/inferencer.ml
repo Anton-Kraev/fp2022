@@ -3,13 +3,12 @@ open Ast
 open Typing
 
 type error =
-  [ `Occurs_check
-  | `No_variable of identifier
-  | `Unification_failed of typ * typ
-  | `Not_reachable
+  [ `OccursCheck (** Occurs check fail *)
+  | `NoVariable of identifier (** Use of undefined variable *)
+  | `UnificationFailed of typ * typ (** Expression of a different type was expected *)
+  | `Unreachable
+    (** Unreachable code. If this error is thrown then there is a bug in parser *)
   ]
-
-type scheme = (type_variable_number, Int.comparator_witness) Set.t * typ
 
 module R : sig
   type 'a t
@@ -137,7 +136,7 @@ end = struct
   let empty = Map.empty (module Int)
 
   let mapping key value =
-    if Type.occurs_in key value then fail `Occurs_check else return (key, value)
+    if Type.occurs_in key value then fail `OccursCheck else return (key, value)
   ;;
 
   let singleton key value =
@@ -166,7 +165,7 @@ end = struct
   let rec unify l r =
     match l, r with
     | TGround l, TGround r when l == r -> return empty
-    | TGround _, TGround _ -> fail @@ `Unification_failed (l, r)
+    | TGround _, TGround _ -> fail @@ `UnificationFailed (l, r)
     | TVar a, TVar b when a = b -> return empty
     | TVar b, t | t, TVar b -> singleton b t
     | TArr (l1, r1), TArr (l2, r2) ->
@@ -175,7 +174,7 @@ end = struct
       compose subs1 subs2
     | TTuple typ_list_l, TTuple typ_list_r ->
       (match List.zip typ_list_l typ_list_r with
-       | List.Or_unequal_lengths.Unequal_lengths -> fail @@ `Unification_failed (l, r)
+       | List.Or_unequal_lengths.Unequal_lengths -> fail @@ `UnificationFailed (l, r)
        | List.Or_unequal_lengths.Ok zipped_list ->
          List.fold_right
            zipped_list
@@ -185,7 +184,7 @@ end = struct
              compose head_sub subst)
            ~init:(return empty))
     | TList typ1, TList typ2 -> unify typ1 typ2
-    | _ -> fail @@ `Unification_failed (l, r)
+    | _ -> fail @@ `UnificationFailed (l, r)
 
   and extend k v s =
     match find k s with
@@ -274,7 +273,7 @@ let generalize : TypeEnv.t -> Type.t -> Scheme.t =
 
 let lookup_env e map =
   match Map.find map e with
-  | None -> fail (`No_variable e)
+  | None -> fail (`NoVariable e)
   | Some scheme ->
     let+ ans = instantiate scheme in
     Subst.empty, ans
@@ -401,7 +400,7 @@ let infer =
           let* identifier =
             match elem with
             | EValueDec (id, _) -> return id
-            | _ -> fail `Not_reachable
+            | _ -> fail `Unreachable
           in
           let* fresh_var = fresh_var in
           let env' = TypeEnv.extend env identifier (Set.empty (module Int), fresh_var) in
