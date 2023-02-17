@@ -554,84 +554,81 @@ let default_d =
 (* main parser *)
 let parse str =
   match parse_string ~consume:Prefix (expr_p default_d) str with
-  | Ok v -> show_expr v
+  | Ok ast -> ast
   | Error msg -> failwith msg
 ;;
 
 (* some parser tests *)
-let%test _ = parse "1" = "(Eliteral (LInt 1))"
-let%test _ = parse "x" = "(EIdentifier \"x\")"
-let%test _ = parse "~1" = "(EUnaryOp (Neg, (ELiteral (LInt 1))))"
+let%test _ = parse "1" = ELiteral (LInt 1)
+let%test _ = parse "x" = EIdentifier "x"
+let%test _ = parse "~1" = EUnaryOp (Neg, ELiteral (LInt 1))
 
 let%test _ =
   parse "(1 + 2)*3=4"
-  = "(EBinaryOp (Eq,\n\
-    \   (EBinaryOp (Mult,\n\
-    \      (EBinaryOp (Add, (ELiteral (LInt 1)), (ELiteral (LInt 2)))),\n\
-    \      (ELiteral (LInt 3)))),\n\
-    \   (ELiteral (LInt 4))))"
+  = EBinaryOp
+      ( Eq
+      , EBinaryOp
+          (Mult, EBinaryOp (Add, ELiteral (LInt 1), ELiteral (LInt 2)), ELiteral (LInt 3))
+      , ELiteral (LInt 4) )
 ;;
 
 let%test _ =
   parse "(1, true, 'd', \"str\")"
-  = "(ETuple\n\
-    \   [(ELiteral (LInt 1)); (ELiteral (LBool true)); (ELiteral (LChar 'd'));\n\
-    \     (ELiteral (LString \"str\"))])"
+  = ETuple
+      [ ELiteral (LInt 1)
+      ; ELiteral (LBool true)
+      ; ELiteral (LChar 'd')
+      ; ELiteral (LString "str")
+      ]
 ;;
 
 let%test _ =
   parse "[[77, 88], [99, 66]]"
-  = "(EList\n\
-    \   [(EList [(ELiteral (LInt 77)); (ELiteral (LInt 88))]);\n\
-    \     (EList [(ELiteral (LInt 99)); (ELiteral (LInt 66))])])"
+  = EList
+      [ EList [ ELiteral (LInt 77); ELiteral (LInt 88) ]
+      ; EList [ ELiteral (LInt 99); ELiteral (LInt 66) ]
+      ]
 ;;
 
 let%test _ =
   parse "1 :: [2, 3]"
-  = "(EConsList ((ELiteral (LInt 1)),\n\
-    \   (EList [(ELiteral (LInt 2)); (ELiteral (LInt 3))])))"
+  = EConsList (ELiteral (LInt 1), EList [ ELiteral (LInt 2); ELiteral (LInt 3) ])
 ;;
 
 let%test _ =
   parse "case x of 1 => true | _ => false"
-  = "(ECaseOf ((EIdentifier \"x\"),\n\
-    \   [((ELiteral (LInt 1)), (ELiteral (LBool true)));\n\
-    \     ((EIdentifier \"_\"), (ELiteral (LBool false)))]\n\
-    \   ))"
+  = ECaseOf
+      ( EIdentifier "x"
+      , [ ELiteral (LInt 1), ELiteral (LBool true)
+        ; EIdentifier "_", ELiteral (LBool false)
+        ] )
 ;;
 
 let%test _ =
   parse "let val x = 1 val y = 2 in x + y end"
-  = "(ELetIn (\n\
-    \   [(EValueDec (\"x\", (ELiteral (LInt 1))));\n\
-    \     (EValueDec (\"y\", (ELiteral (LInt 2))))],\n\
-    \   (EBinaryOp (Add, (EIdentifier \"x\"), (EIdentifier \"y\")))))"
+  = ELetIn
+      ( [ EValueDec ("x", ELiteral (LInt 1)); EValueDec ("y", ELiteral (LInt 2)) ]
+      , EBinaryOp (Add, EIdentifier "x", EIdentifier "y") )
 ;;
 
 let%test _ =
   parse "f (x y)"
-  = "(EApplication ((EIdentifier \"f\"),\n\
-    \   (EApplication ((EIdentifier \"x\"), (EIdentifier \"y\")))))"
+  = EApplication (EIdentifier "f", EApplication (EIdentifier "x", EIdentifier "y"))
 ;;
 
 let%test _ =
   parse "fun f x y = x orelse y"
-  = "(EFunDec (\"f\", [\"x\"; \"y\"],\n\
-    \   (EBinaryOp (Or, (EIdentifier \"x\"), (EIdentifier \"y\")))))"
+  = EFunDec ("f", [ "x"; "y" ], EBinaryOp (Or, EIdentifier "x", EIdentifier "y"))
 ;;
 
-let%test _ =
-  parse "val x = not x" = "(EValueDec (\"x\", (EUnaryOp (Not, (EIdentifier \"x\")))))"
-;;
+let%test _ = parse "val x = not x" = EValueDec ("x", EUnaryOp (Not, EIdentifier "x"))
 
 let%test _ =
   parse "fn x y => x <= y"
-  = "(EArrowFun ([\"x\"; \"y\"],\n\
-    \   (EBinaryOp (LessOrEq, (EIdentifier \"x\"), (EIdentifier \"y\")))))"
+  = EArrowFun ([ "x"; "y" ], EBinaryOp (LessOrEq, EIdentifier "x", EIdentifier "y"))
 ;;
 
 let%test _ =
   parse "if true then 1 else 0"
-  = "(EIfThenElse ((ELiteral (LBool true)), (ELiteral (LInt 1)),\n\
-    \   (ELiteral (LInt 0))))"
+  = EIfThenElse (ELiteral (LBool true), ELiteral (LInt 1), ELiteral (LInt 0))
 ;;

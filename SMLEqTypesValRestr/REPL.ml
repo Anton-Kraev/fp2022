@@ -1,4 +1,4 @@
 open SMLEqTypesValRestr_lib.Parser
 open SMLEqTypesValRestr_lib.Ast
 
-let () = parse "val x = 1 + 2 + x" |> print_endline
+let () = parse "1" |> pp_expr Format.std_formatter

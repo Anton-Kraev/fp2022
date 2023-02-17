@@ -3,4 +3,4 @@
 (** SPDX-License-Identifier: LGPL-3.0-or-later *)
 open Ast
 
-val parse : string -> string
+val parse : string -> expr
