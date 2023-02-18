@@ -399,7 +399,7 @@ let infer =
         | elem :: tail ->
           let* identifier =
             match elem with
-            | EValueDec (id, _) -> return id
+            | EValDec (id, _) | EValRecDec (id, _) -> return id
             | _ -> fail `Unreachable
           in
           let* fresh_var = fresh_var in
@@ -425,7 +425,7 @@ let infer =
       let+ final_subst = Subst.compose_all [ left_subst; right_subst; subst' ] in
       final_subst, result_type
     | EFunDec (_, args, body) -> helper env @@ EArrowFun (args, body)
-    | EValueDec (_, body) -> helper env @@ EArrowFun ([], body)
+    | EValDec (_, body) | EValRecDec (_, body) -> helper env @@ EArrowFun ([], body)
     | EArrowFun (args, body) ->
       (match args with
        | [] -> helper env body

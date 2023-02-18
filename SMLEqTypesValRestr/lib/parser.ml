@@ -16,7 +16,8 @@ type dispatch =
   ; let_in_p : dispatch -> Ast.expr Angstrom.t
   ; application_p : dispatch -> Ast.expr Angstrom.t
   ; fun_dec_p : dispatch -> Ast.expr Angstrom.t
-  ; value_dec_p : dispatch -> Ast.expr Angstrom.t
+  ; val_dec_p : dispatch -> Ast.expr Angstrom.t
+  ; val_rec_dec_p : dispatch -> Ast.expr Angstrom.t
   ; arrow_fun_p : dispatch -> Ast.expr Angstrom.t
   ; if_then_else_p : dispatch -> Ast.expr Angstrom.t
   ; expr_p : dispatch -> Ast.expr Angstrom.t
@@ -217,7 +218,6 @@ let tuple_p d =
       ; d.case_of_p d
       ; d.let_in_p d
       ; d.application_p d
-      ; d.value_dec_p d
       ; literal_p
       ; identifier_p
       ]
@@ -242,7 +242,6 @@ let list_p d =
       ; d.case_of_p d
       ; d.let_in_p d
       ; d.application_p d
-      ; d.value_dec_p d
       ; literal_p
       ; identifier_p
       ]
@@ -350,7 +349,7 @@ let let_in_p d =
       *> take_while1 is_space
       *> lift2
            e_let_in
-           (sep_by1 (take_while1 is_space) (d.value_dec_p d))
+           (sep_by1 (take_while1 is_space) (d.val_dec_p d <|> d.val_rec_dec_p d))
            (spaces *> string "in" *> parse_content <* spaces <* string "end")
 ;;
 
@@ -422,7 +421,7 @@ let fun_dec_p d =
     (spaces *> string "=" *> parse_content)
 ;;
 
-let value_dec_p d =
+let val_dec_p d =
   fix
   @@ fun _ ->
   spaces
@@ -446,7 +445,39 @@ let value_dec_p d =
       ]
   in
   lift2
-    e_value_dec
+    e_val_dec
+    (identifier_p
+    >>= id_of_expr
+    >>= fun name ->
+    if name = "_" then fail "Parsing error: wildcard not expected." else return name)
+    (spaces *> string "=" *> parse_content)
+;;
+
+let val_rec_dec_p d =
+  fix
+  @@ fun _ ->
+  spaces
+  *> string "val rec"
+  *> spaces
+  *>
+  let parse_content =
+    choice
+      [ d.unary_op_p d
+      ; d.binary_op_p d
+      ; d.tuple_p d
+      ; d.list_p d
+      ; d.cons_list_p d
+      ; d.case_of_p d
+      ; d.let_in_p d
+      ; d.application_p d
+      ; d.arrow_fun_p d
+      ; d.if_then_else_p d
+      ; literal_p
+      ; identifier_p
+      ]
+  in
+  lift2
+    e_val_rec_dec
     (identifier_p
     >>= id_of_expr
     >>= fun name ->
@@ -525,7 +556,8 @@ let expr_p d =
     ; d.let_in_p d
     ; d.application_p d
     ; d.fun_dec_p d
-    ; d.value_dec_p d
+    ; d.val_dec_p d
+    ; d.val_rec_dec_p d
     ; d.arrow_fun_p d
     ; d.if_then_else_p d
     ; literal_p
@@ -544,7 +576,8 @@ let default_d =
   ; let_in_p
   ; application_p
   ; fun_dec_p
-  ; value_dec_p
+  ; val_dec_p
+  ; val_rec_dec_p
   ; arrow_fun_p
   ; if_then_else_p
   ; expr_p
@@ -604,7 +637,7 @@ let%test _ =
 let%test _ =
   parse_optimistically "let val x = 1 val y = 2 in x + y end"
   = ELetIn
-      ( [ EValueDec ("x", ELiteral (LInt 1)); EValueDec ("y", ELiteral (LInt 2)) ]
+      ( [ EValDec ("x", ELiteral (LInt 1)); EValDec ("y", ELiteral (LInt 2)) ]
       , EBinaryOp (Add, EIdentifier "x", EIdentifier "y") )
 ;;
 
@@ -619,7 +652,25 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_optimistically "val x = not x" = EValueDec ("x", EUnaryOp (Not, EIdentifier "x"))
+  parse_optimistically "val x = not x" = EValDec ("x", EUnaryOp (Not, EIdentifier "x"))
+;;
+
+let%test _ =
+  parse_optimistically
+    "val rec factorial = fn n => if n <= 1 then 1 else n * factorial (n - 1)"
+  = EValRecDec
+      ( "factorial"
+      , EArrowFun
+          ( [ "n" ]
+          , EIfThenElse
+              ( EBinaryOp (LessOrEq, EIdentifier "n", ELiteral (LInt 1))
+              , ELiteral (LInt 1)
+              , EBinaryOp
+                  ( Mult
+                  , EIdentifier "n"
+                  , EApplication
+                      ( EIdentifier "factorial"
+                      , EBinaryOp (Sub, EIdentifier "n", ELiteral (LInt 1)) ) ) ) ) )
 ;;
 
 let%test _ =

@@ -52,10 +52,11 @@ type expr =
                                     a + b
                                   end *)
   | EApplication of expr * expr (* f x *)
-  | EFunDec of id * id list * expr
-    (* fun f x y = x + y
-                                      fun factorial n = n * factorial (n - 1) *)
-  | EValueDec of id * expr (* val x = 88 *)
+  | EFunDec of id * id list * expr (* fun f x y = x + y *)
+  | EValDec of id * expr (* val x = 88 *)
+  | EValRecDec of
+      id
+      * expr (* val rec factorial = fn n => if n <= 1 then 1 else n * factorial (n - 1) *)
   | EArrowFun of id list * expr (* fn x => x + 1 *)
   | EIfThenElse of expr * expr * expr (* if true then 1 else 0 *)
 [@@deriving show { with_path = false }]
@@ -72,7 +73,8 @@ let e_case_of expression cases = ECaseOf (expression, cases)
 let e_let_in declarations body = ELetIn (declarations, body)
 let e_application func args = EApplication (func, args)
 let e_fun_dec func_id args_id body = EFunDec (func_id, args_id, body)
-let e_value_dec value_id expression = EValueDec (value_id, expression)
+let e_val_dec value_id expression = EValDec (value_id, expression)
+let e_val_rec_dec value_id expression = EValRecDec (value_id, expression)
 let e_arrow_fun args_id expression = EArrowFun (args_id, expression)
 let e_if_then_else cond if_true if_false = EIfThenElse (cond, if_true, if_false)
 

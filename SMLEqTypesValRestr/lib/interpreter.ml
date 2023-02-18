@@ -21,7 +21,7 @@ type error =
   | `Unreachable
     (** Unreachable code. If this error is thrown then something went seriously wrong *)
   | `UnsupportedOperation (** Used unsupported operation *)
-  | `Division_by_zero (** n / 0*)
+  | `DivisionByZero (** n / 0*)
   | `NotAFunction (** Unreachable when type inference is used *)
   | `TypeMismatch (** Unreachable when type inference is used *)
   | `MisusedWildcard (** Wildcard is in the right-hand expression *)
@@ -54,6 +54,7 @@ end
 
 module Interpret (M : MONAD_ERROR) : sig
   val run : expr list -> value M.t
+  val eval : expr -> environment -> value M.t
 end = struct
   open M
   open Environment (M)
@@ -85,7 +86,7 @@ end = struct
        | Sub, VInt x, VInt y -> return @@ VInt (x - y)
        | Mult, VInt x, VInt y -> return @@ VInt (x * y)
        | Div, VInt x, VInt y ->
-         if y = 0 then fail `Division_by_zero else return @@ VInt (x / y)
+         if y = 0 then fail `DivisionByZero else return @@ VInt (x / y)
        | (Add | Sub | Mult | Div), _, _ -> fail `TypeMismatch
        (* Logical operations *)
        | And, VBool x, VBool y -> return @@ VBool (x && y)
@@ -146,7 +147,13 @@ end = struct
       (match arguments_list with
        | [] -> eval function_body environment
        | _ -> return @@ VFun (arguments_list, function_body, environment, Recursive))
-    | EValueDec (_, function_body) -> eval function_body environment
+    | EValDec (_, body) -> eval body environment
+    | EValRecDec (_, body) ->
+      let* eval_body = eval body environment in
+      (match eval_body with
+       | VFun (id_list, function_body, environment, _) ->
+         return @@ VFun (id_list, function_body, environment, Recursive)
+       | _ -> return eval_body)
     | EIfThenElse (condition, true_branch, false_branch) ->
       let* eval_conditional = eval condition environment in
       (match eval_conditional with
@@ -190,7 +197,8 @@ end = struct
         | h :: t ->
           let* result = eval h environment in
           (match h with
-           | EValueDec (name, _) -> eval_bindings (update environment name result) t
+           | EValDec (name, _) | EValRecDec (name, _) ->
+             eval_bindings (update environment name result) t
            | _ -> fail `Unreachable)
         | _ -> eval expression environment
       in
