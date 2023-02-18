@@ -283,6 +283,12 @@ let rec find_identifiers = function
   | EBinaryOp (_, left, right) -> find_identifiers left @ find_identifiers right
   | EUnaryOp (_, operand) -> find_identifiers operand
   | EApplication (expr1, expr2) -> find_identifiers expr1 @ find_identifiers expr2
+  | EList expr_list | ETuple expr_list ->
+    List.fold_right
+      ~f:(fun expression acc -> find_identifiers expression @ acc)
+      ~init:[]
+      expr_list
+  | EConsList (head, tail) -> find_identifiers head @ find_identifiers tail
   | EIdentifier id -> [ id ]
   | _ -> []
 ;;

@@ -282,9 +282,9 @@ let case_of_p d =
   let parse_content_left =
     choice
       [ d.unary_op_p d
+      ; d.cons_list_p d
       ; d.tuple_p d
       ; d.list_p d
-      ; d.cons_list_p d
       ; literal_p
       ; identifier_p
       ]
@@ -294,9 +294,9 @@ let case_of_p d =
       [ self
       ; d.unary_op_p d
       ; d.binary_op_p d
+      ; d.cons_list_p d
       ; d.tuple_p d
       ; d.list_p d
-      ; d.cons_list_p d
       ; d.let_in_p d
       ; d.application_p d
       ; d.arrow_fun_p d

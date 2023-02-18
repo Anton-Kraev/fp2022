@@ -102,14 +102,14 @@ let pp_error fmt =
 let print_error = Format.printf "%a" pp_error
 
 let () =
-  parse "val rec factorial = fn n => if n <= 1 then 1 else n * factorial (n - 1)"
+  parse "fun f arr = case arr of | head :: tail => 1 | _ => 0"
   |> function
   | Ok ast -> show_expr ast |> print_endline
   | Error msg -> failwith msg
 ;;
 
 let () =
-  parse "let val rec f = fn n => case n of 1 => 1 | x => x * (f (x-1)) in f 3 end"
+  parse "fun f arr match = match arr"
   |> function
   | Ok ast ->
     Result.map snd (R.run (infer TypeEnv.empty ast))
@@ -138,7 +138,7 @@ open Interpret (Res)
 open Environment (Res)
 
 let () =
-  parse "let val rec f = fn n => case n of 1 => 1 | x => x * (f (x-1)) in f 10 end"
+  parse "fun f arr match = match arr"
   |> function
   | Ok ast ->
     Result.map snd (R.run (infer TypeEnv.empty ast))
@@ -151,3 +151,5 @@ let () =
     | Error err -> print_type_error err)
   | Error msg -> failwith msg
 ;;
+
+let f (x : char list) (y : char list) = x < y
