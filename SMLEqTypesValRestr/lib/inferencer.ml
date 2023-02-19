@@ -84,7 +84,7 @@ module Type = struct
   type t = typ
 
   let rec occurs_in v = function
-    | TVar id -> id = v
+    | TVar id | TEqualityVar id -> id = v
     | TArr (l, r) -> occurs_in v l || occurs_in v r
     | TTuple typ_list -> List.exists typ_list ~f:(occurs_in v)
     | TList typ -> occurs_in v typ
@@ -94,7 +94,7 @@ module Type = struct
   let free_vars =
     let empty_set = Set.empty (module Int) in
     let rec helper acc = function
-      | TVar n -> Set.add acc n
+      | TVar n | TEqualityVar n -> Set.add acc n
       | TArr (left, right) -> helper (helper acc left) right
       | TTuple typ_list ->
         List.fold_right
@@ -154,6 +154,10 @@ end = struct
         (match find_exn n s with
          | exception Not_found_s _ -> var_t n
          | x -> x)
+      | TEqualityVar n ->
+        (match find_exn n s with
+         | exception Not_found_s _ -> var_eq_t n
+         | x -> x)
       | TArr (left, right) -> arrow_t (helper left) (helper right)
       | TTuple typ_list -> tuple_t @@ List.map typ_list ~f:helper
       | TList typ -> list_t @@ helper typ
@@ -166,8 +170,9 @@ end = struct
     match l, r with
     | TGround l, TGround r when l == r -> return empty
     | TGround _, TGround _ -> fail @@ `UnificationFailed (l, r)
-    | TVar a, TVar b when a = b -> return empty
-    | TVar b, t | t, TVar b -> singleton b t
+    | (TVar a, TVar b | TEqualityVar a, TEqualityVar b) when a = b -> return empty
+    | TEqualityVar _, TArr _ | TArr _, TEqualityVar _ -> fail @@ `UnificationFailed (l, r)
+    | TVar b, t | t, TVar b | TEqualityVar b, t | t, TEqualityVar b -> singleton b t
     | TArr (l1, r1), TArr (l2, r2) ->
       let* subs1 = unify l1 l2 in
       let* subs2 = unify (apply subs1 r1) (apply subs1 r2) in
@@ -253,6 +258,7 @@ open R.Syntax
 
 let unify = Subst.unify
 let fresh_var = fresh >>| var_t
+let fresh_eq_var = fresh >>| var_eq_t
 
 let instantiate : scheme -> typ R.t =
  fun (set, t) ->
@@ -332,7 +338,12 @@ let infer =
          final_subst, int_typ
        | Eq | NotEq | Greater | GreaterOrEq | Less | LessOrEq ->
          let* subst' = unify left_type right_type in
-         let+ final_subst = Subst.compose_all [ subst'; left_subst; right_subst ] in
+         let* fresh_eq_var = fresh_eq_var in
+         let* subst'' = unify left_type fresh_eq_var in
+         let* subst''' = unify right_type fresh_eq_var in
+         let+ final_subst =
+           Subst.compose_all [ subst'; left_subst; right_subst; subst''; subst''' ]
+         in
          final_subst, bool_typ
        | And | Or ->
          let* subst' = unify left_type bool_typ in

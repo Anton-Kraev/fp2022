@@ -30,6 +30,7 @@ let rec pp_type fmt typ =
   | TArr (typ_left, typ_right) ->
     fprintf fmt (arrow_format typ_left ^^ " -> %a") pp_type typ_left pp_type typ_right
   | TVar var -> fprintf fmt "%s" @@ "'" ^ Char.escaped (Char.chr (var + 97))
+  | TEqualityVar var -> fprintf fmt "%s" @@ "''" ^ Char.escaped (Char.chr (var + 97))
 ;;
 
 let print_typ typ =
@@ -102,14 +103,43 @@ let pp_error fmt =
 let print_error = Format.printf "%a" pp_error
 
 let () =
-  parse "fun f arr = case arr of | head :: tail => 1 | _ => 0"
+  parse "fun f x = case x of y => y"
   |> function
   | Ok ast -> show_expr ast |> print_endline
   | Error msg -> failwith msg
 ;;
 
 let () =
-  parse "fun f arr match = match arr"
+  parse "fn x y => x = y"
+  |> function
+  | Ok ast -> show_expr ast |> print_endline
+  | Error msg -> failwith msg
+;;
+
+let () =
+  parse "fun f x = case x of y => y"
+  |> function
+  | Ok ast ->
+    Result.map snd (R.run (infer TypeEnv.empty ast))
+    |> (function
+    | Ok t -> print_typ t
+    | Error err -> print_type_error err)
+  | Error msg -> failwith msg
+;;
+
+let () =
+  parse "fn x y z => x = y orelse case z of (h, t) => h"
+  |> function
+  | Ok ast ->
+    Result.map snd (R.run (infer TypeEnv.empty ast))
+    |> (function
+    | Ok t -> print_typ t
+    | Error err -> print_type_error err)
+  | Error msg -> failwith msg
+;;
+
+let () =
+  parse "val x = fn x y => let val id = x\n                val idid = y in idid = id end"
   |> function
   | Ok ast ->
     Result.map snd (R.run (infer TypeEnv.empty ast))
@@ -138,7 +168,7 @@ open Interpret (Res)
 open Environment (Res)
 
 let () =
-  parse "fun f arr match = match arr"
+  parse "fun f x = case x of y => y"
   |> function
   | Ok ast ->
     Result.map snd (R.run (infer TypeEnv.empty ast))
@@ -152,4 +182,32 @@ let () =
   | Error msg -> failwith msg
 ;;
 
-let f (x : char list) (y : char list) = x < y
+let () =
+  parse "let val t = (fn x y z => x = y orelse z) in (t 2 2 false) end"
+  |> function
+  | Ok ast ->
+    Result.map snd (R.run (infer TypeEnv.empty ast))
+    |> (function
+    | Ok _ ->
+      eval ast empty
+      |> (function
+      | Ok result -> print_value result
+      | Error error -> print_error error)
+    | Error err -> print_type_error err)
+  | Error msg -> failwith msg
+;;
+
+let () =
+  parse "val x = fn x y => let val id = x\n                val idid = y in idid = id end"
+  |> function
+  | Ok ast ->
+    Result.map snd (R.run (infer TypeEnv.empty ast))
+    |> (function
+    | Ok _ ->
+      eval ast empty
+      |> (function
+      | Ok result -> print_value result
+      | Error error -> print_error error)
+    | Error err -> print_type_error err)
+  | Error msg -> failwith msg
+;;
