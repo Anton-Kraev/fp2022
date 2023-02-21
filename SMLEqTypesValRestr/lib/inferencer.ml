@@ -6,6 +6,9 @@ type error =
   [ `OccursCheck (** Occurs check fail *)
   | `NoVariable of identifier (** Use of undefined variable *)
   | `UnificationFailed of typ * typ (** Expression of a different type was expected *)
+  | `ValueRestriction of identifier
+    (** The inability to make <id> polymorphic, type of <id> cannot be
+         generalized because its declaration is expansive (not a value). *)
   | `Unreachable
     (** Unreachable code. If this error is thrown then there is a bug in parser *)
   ]
@@ -442,7 +445,20 @@ let infer =
       let+ final_subst = Subst.compose_all [ left_subst; right_subst; subst' ] in
       final_subst, result_type
     | EFunDec (_, args, body) -> helper env @@ EArrowFun (args, body)
-    | EValDec (_, body) | EValRecDec (_, body) -> helper env @@ EArrowFun ([], body)
+    | EValDec (id, body) | EValRecDec (id, body) ->
+      let rec is_syntactically_value = function
+        | EArrowFun _ | EIdentifier _ | ELiteral _ -> true
+        | EList elems | ETuple elems ->
+          (match elems with
+           | [] -> true
+           | [ x ] -> is_syntactically_value x
+           | h :: t -> is_syntactically_value h && (is_syntactically_value @@ EList t))
+        | _ -> false
+      in
+      let* body =
+        if is_syntactically_value body then return body else fail @@ `ValueRestriction id
+      in
+      helper env @@ EArrowFun ([], body)
     | EArrowFun (args, body) ->
       (match args with
        | [] -> helper env body
