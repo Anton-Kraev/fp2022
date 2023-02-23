@@ -1,8 +1,14 @@
 (executable
- (name demo)
- (public_name demo)
- (modules Demo)
- (libraries SMLEqTypesValRestr_lib))
+ (name demoInfer)
+ (public_name demoInfer)
+ (modules DemoInfer)
+ (libraries SMLEqTypesValRestr_lib stdio))
+
+(executable
+ (name demoInterpret)
+ (public_name demoInterpret)
+ (modules DemoInterpret)
+ (libraries SMLEqTypesValRestr_lib stdio))
 
 (cram
- (deps ./demo.exe))
+ (deps ./demoInterpret.exe ./demoInfer.exe))
