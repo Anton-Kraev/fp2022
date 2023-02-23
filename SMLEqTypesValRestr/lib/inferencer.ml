@@ -331,12 +331,11 @@ let infer =
          in
          final_subst, int_typ
        | Eq | NotEq | Greater | GreaterOrEq | Less | LessOrEq ->
-         let* subst' = unify left_type right_type in
          let* fresh_eq_var = fresh_eq_var in
-         let* subst'' = unify left_type fresh_eq_var in
-         let* subst''' = unify right_type fresh_eq_var in
+         let* subst' = unify left_type fresh_eq_var in
+         let* subst'' = unify right_type fresh_eq_var in
          let+ final_subst =
-           Subst.compose_all [ subst'; left_subst; right_subst; subst''; subst''' ]
+           Subst.compose_all [ left_subst; right_subst; subst'; subst'' ]
          in
          final_subst, bool_typ
        | And | Or ->

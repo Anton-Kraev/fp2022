@@ -7,8 +7,8 @@ module type MONAD_ERROR = sig
   val return : 'a -> 'a t
   val fail : error -> 'a t
   val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
-  val ( >>| ) : 'a t -> ('a -> 'b) -> 'b t
   val ( let* ) : 'a t -> ('a -> 'b t) -> 'b t
+  val ( *> ) : 'a t -> 'b t -> 'b t
 end
 
 module Environment (M : MONAD_ERROR) = struct
@@ -187,7 +187,6 @@ end = struct
             let monadic_execution, new_environment, tail_success =
               helper environment (matched_tail, tail)
             in
-            let ( *> ) l r = l >>= fun _ -> r in
             result *> monadic_execution, new_environment, head_success && tail_success
           | [], [] -> eval action environment, environment, true
           | _ -> fail `PatternMatchingFailed, environment, false
@@ -224,7 +223,6 @@ end = struct
              let monadic_execution, new_environment, tail_success =
                compare_patterns (VList matched_tail) tail action environment
              in
-             let ( *> ) l r = l >>= fun _ -> r in
              result *> monadic_execution, new_environment, head_success && tail_success
            | [] -> fail `PatternMatchingFailed, environment, false)
         | _ -> fail `PatternMatchingFailed, environment, false
@@ -247,16 +245,17 @@ end
 open Interpret (struct
   type 'a t = ('a, error) result
 
+  let return = Stdlib.Result.ok
+  let fail = Stdlib.Result.error
+
   let ( >>= ) e1 e2 =
     match e1 with
     | Ok x -> e2 x
     | Error s -> Error s
   ;;
 
-  let return = Stdlib.Result.ok
-  let fail = Stdlib.Result.error
   let ( let* ) = ( >>= )
-  let ( >>| ) f g = f >>= fun x -> return (g x)
+  let ( *> ) l r = l >>= fun _ -> r
 end)
 
 let run_interpreter input =
