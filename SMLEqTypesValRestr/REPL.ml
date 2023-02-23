@@ -1,5 +1,5 @@
-open SMLEqTypesValRestr_lib.Parser
-open SMLEqTypesValRestr_lib.Ast
-open SMLEqTypesValRestr_lib.Inferencer
-open SMLEqTypesValRestr_lib.Typing
-open SMLEqTypesValRestr_lib.Interpreter
+(** Copyright 2022-2023, Anton Kraev *)
+
+(** SPDX-License-Identifier: LGPL-3.0-or-later *)
+
+let () = print_endline "REPL not implemented"

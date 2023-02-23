@@ -1,0 +1,8 @@
+(executable
+ (name demo)
+ (public_name demo)
+ (modules Demo)
+ (libraries SMLEqTypesValRestr_lib))
+
+(cram
+ (deps ./demo.exe))
