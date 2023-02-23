@@ -1,33 +1,5 @@
 open Ast
-
-type environment = (id, value, Base.String.comparator_witness) Base.Map.t
-
-and rec_flag =
-  | Recursive
-  | NonRecursive
-
-and value =
-  | VInt of int (** 5 *)
-  | VString of string (** "apple" *)
-  | VBool of bool (** true *)
-  | VChar of char (** 'a' *)
-  | VUnit (** () *)
-  | VList of value list (** [1; 2; 3] *)
-  | VTuple of value list (** ("abc", 123, false) *)
-  | VFun of id list * expr * environment * rec_flag (** fun x -> x * x *)
-
-type error =
-  [ `UnboundValue of string (** Unbound value *)
-  | `Unreachable
-    (** Unreachable code. If this error is thrown then something went seriously wrong *)
-  | `UnsupportedOperation (** Used unsupported operation *)
-  | `DivisionByZero (** n / 0*)
-  | `NotAFunction (** Unreachable when type inference is used *)
-  | `TypeMismatch (** Unreachable when type inference is used *)
-  | `MisusedWildcard (** Wildcard is in the right-hand expression *)
-  | `PatternMatchingFailed (** The case is not matched *)
-  | `NonExhaustivePatternMatching (** Pattern-matching is not exhaustive *)
-  ]
+open Result
 
 module type MONAD_ERROR = sig
   type 'a t = ('a, error) result
@@ -53,13 +25,10 @@ module Environment (M : MONAD_ERROR) = struct
 end
 
 module Interpret (M : MONAD_ERROR) : sig
-  val run : expr list -> value M.t
-  val eval : expr -> environment -> value M.t
+  val run : expr -> value M.t
 end = struct
   open M
   open Environment (M)
-
-  let run e = return @@ VString "TODO"
 
   let rec eval (expression : expr) (environment : environment) =
     let rec foldr f ini = function
@@ -271,4 +240,111 @@ end = struct
       in
       helper case_list
   ;;
+
+  let run expr = eval expr empty
 end
+
+open Interpret (struct
+  type 'a t = ('a, error) result
+
+  let ( >>= ) e1 e2 =
+    match e1 with
+    | Ok x -> e2 x
+    | Error s -> Error s
+  ;;
+
+  let return = Stdlib.Result.ok
+  let fail = Stdlib.Result.error
+  let ( let* ) = ( >>= )
+  let ( >>| ) f g = f >>= fun x -> return (g x)
+end)
+
+let run_interpreter input =
+  match Parser.parse input with
+  | Ok ast ->
+    (match Inferencer.run_inference ast with
+     | Ok _ ->
+       (match run ast with
+        | Ok result -> print_value result
+        | Error err -> print_error err)
+     | Error err -> Typing.print_type_error err)
+  | Error msg -> Format.fprintf Format.std_formatter "Parsing error: (%S)" msg
+;;
+
+(* tests *)
+
+let%expect_test _ =
+  run_interpreter "let val f = fn x => x / 0 in f 5 end";
+  [%expect {| Runtime error: division by zero. |}]
+;;
+
+let%expect_test _ =
+  run_interpreter "let val f = fn x => case x of 1 => true in f 2 end";
+  [%expect {| Runtime error: this pattern-matching is not exhaustive. |}]
+;;
+
+let%expect_test _ =
+  run_interpreter "let val f = fn x => case x of 1 => true | _ => false in f 2 end";
+  [%expect {| false |}]
+;;
+
+let%expect_test _ =
+  run_interpreter "fn x => x";
+  [%expect {| <fun> |}]
+;;
+
+let%expect_test _ =
+  run_interpreter "val x = ()";
+  [%expect {| () |}]
+;;
+
+let%expect_test _ =
+  run_interpreter
+    "let val factorial = fn n => if n <= 1 then 1 else n * factorial (n - 1) in \
+     factorial 10 end";
+  [%expect {| Runtime error: unbound value factorial. |}]
+;;
+
+let%expect_test _ =
+  run_interpreter
+    "let val rec factorial = fn n => if n <= 1 then 1 else n * factorial (n - 1) in \
+     factorial 10 end";
+  [%expect {| 3628800 |}]
+;;
+
+let%expect_test _ =
+  run_interpreter "let val x = 10 val y = 5 in ~(x + y) * 2 end";
+  [%expect {| -30 |}]
+;;
+
+let%expect_test _ =
+  run_interpreter "let val f = (fn x => not x) val y = ('a', \"abc\") in (f false, y) end";
+  [%expect {| (true, ('a', "abc")) |}]
+;;
+
+let%expect_test _ =
+  run_interpreter
+    "let val rec sum = (fn arr => case arr of [] => 0 | h::t => h + sum t) in sum [1, 2, \
+     3, 4, 5] end";
+  [%expect {| 15 |}]
+;;
+
+let%expect_test _ =
+  run_interpreter
+    "let val f = fn x y => let val id = (fn x => x) val idid = (fn x => id id x) in \
+     (case idid x of true => 1 | _ => 0) + (case idid y of 1 => 1 | _ => 0) end in f \
+     true 1 end";
+  [%expect {| 2 |}]
+;;
+
+let%expect_test _ =
+  run_interpreter
+    "let val rec f = (fn x y => case x of [] => y | [a] => a::y | h::t => h::(f t y)) in \
+     f [1, 2, 3] [4, 5, 6] end";
+  [%expect {| [1, 2, 3, 4, 5, 6] |}]
+;;
+
+let%expect_test _ =
+  run_interpreter "let val f = fn x y => [if x < y then y else x] in f 10 100 end";
+  [%expect {| [100] |}]
+;;

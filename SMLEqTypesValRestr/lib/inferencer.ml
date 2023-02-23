@@ -2,16 +2,7 @@ open Base
 open Ast
 open Typing
 
-type error =
-  [ `OccursCheck (** Occurs check fail *)
-  | `NoVariable of identifier (** Use of undefined variable *)
-  | `UnificationFailed of typ * typ (** Expression of a different type was expected *)
-  | `ValueRestriction of identifier
-    (** The inability to make <id> polymorphic, type of <id> cannot be
-         generalized because its declaration is expansive (not a value). *)
-  | `Unreachable
-    (** Unreachable code. If this error is thrown then there is a bug in parser *)
-  ]
+type error = Typing.error
 
 module R : sig
   type 'a t
@@ -481,4 +472,95 @@ let infer =
       final_subst, Subst.apply final_subst true_branch_type
   in
   helper
+;;
+
+let run_inference expression = Result.map (run (infer TypeEnv.empty expression)) ~f:snd
+
+let parse_and_inference input =
+  match Parser.parse input with
+  | Ok ast ->
+    (match run_inference ast with
+     | Ok typ -> print_typ typ
+     | Error e -> print_type_error e)
+  | Error e -> Format.fprintf Format.std_formatter "Parsing error: (%S)" e
+;;
+
+(* tests *)
+let%expect_test _ =
+  parse_and_inference "fn x => (\"some string\", 'c', x * x, true)";
+  [%expect {|
+    int -> string * char * int * bool
+  |}]
+;;
+
+let%expect_test _ =
+  parse_and_inference
+    "fn x => let val rec factorial = fn n => if n <= 1 then 1 else n * factorial (n - 1) \
+     in factorial x end";
+  [%expect {|
+    int -> int
+  |}]
+;;
+
+let%expect_test _ =
+  parse_and_inference "val r = fn x => not x";
+  [%expect {|
+    bool -> bool
+  |}]
+;;
+
+let%expect_test _ =
+  parse_and_inference "fun id x = x";
+  [%expect {|
+    'a -> 'a
+  |}]
+;;
+
+let%expect_test _ =
+  parse_and_inference "fn x y z w => x < y orelse z > w";
+  [%expect {|
+    ''e -> ''e -> ''f -> ''f -> bool
+  |}]
+;;
+
+let%expect_test _ =
+  parse_and_inference
+    "let val f = fn x y => let val id = (fn x => x) val idid = (id id) in (case idid x \
+     of true => 1) + (case idid y of 1 => 1) end in f false 0 end";
+  [%expect
+    {|
+    Value restriction: type of idid cannot be generalized because its declaration is expansive (not a value).
+  |}]
+;;
+
+let%expect_test _ =
+  parse_and_inference
+    "let val f = fn x y => let val id = (fn x => x) val idid = (fn x => id id x) in \
+     (case idid x of true => 1 | _ => 0) + (case idid y of 1 => 1 | _ => 0) end in f \
+     true 1 end";
+  [%expect {| int |}]
+;;
+
+let%expect_test _ =
+  parse_and_inference
+    "fn x y f a b => x = y andalso (case a of [] => f b | h :: t => f h) = 0";
+  [%expect {| ''f -> ''f -> ('h -> int) -> 'h list -> 'h -> bool |}]
+;;
+
+let%expect_test _ =
+  parse_and_inference
+    "fn x y => case y of (a, b) => (~(if a = 'a' then 1 else 0) + (if b = \"b\" then 1 \
+     else 0), x)";
+  [%expect {| 'a -> char * string -> int * 'a |}]
+;;
+
+let%expect_test _ =
+  parse_and_inference "fn first arr => case arr of [] => false | h::t => h = first";
+  [%expect {| ''f -> ''f list -> bool |}]
+;;
+
+let%expect_test _ =
+  parse_and_inference "fn x y => x = y orelse y + x";
+  [%expect
+    {| Unification failed: type of the expression is int but expected type was bool |}]
 ;;

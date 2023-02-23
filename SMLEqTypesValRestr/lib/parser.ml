@@ -586,7 +586,7 @@ let default_d =
 
 (* main parser *)
 let parse str = parse_string ~consume:Prefix (expr_p default_d) str
-let parse_optimistically str = Result.get_ok @@ parse str
+let parse_optimistically str = Stdlib.Result.get_ok @@ parse str
 
 (* some parser tests *)
 let%test _ = parse_optimistically "1" = ELiteral (LInt 1)
