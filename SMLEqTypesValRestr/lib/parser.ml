@@ -5,6 +5,45 @@
 open Angstrom
 open Ast
 
+(* helper functions and parsers *)
+let is_space = function
+  | ' ' | '\t' | '\n' | '\r' -> true
+  | _ -> false
+;;
+
+let is_first_char = function
+  | 'a' .. 'z' | '_' -> true
+  | _ -> false
+;;
+
+let is_varname_char = function
+  | 'a' .. 'z' | 'A' .. 'Z' | '_' | '0' .. '9' -> true
+  | _ -> false
+;;
+
+let spaces = take_while is_space
+let parens p = spaces *> char '(' *> spaces *> p <* spaces <* char ')'
+
+let integer =
+  take_while1 (function
+    | '0' .. '9' -> true
+    | _ -> false)
+  >>| int_of_string
+;;
+
+let varname =
+  peek_char_fail
+  >>= fun first ->
+  if is_first_char first
+  then take_while is_varname_char
+  else fail "Parsing error: bad first symbol of id."
+;;
+
+let id_of_expr = function
+  | EIdentifier x -> return x
+  | _ -> failwith "Unreachable"
+;;
+
 (* dispatch for parsers *)
 type dispatch =
   { unary_op_p : dispatch -> Ast.expr Angstrom.t
@@ -23,46 +62,7 @@ type dispatch =
   ; expr_p : dispatch -> Ast.expr Angstrom.t
   }
 
-(* helper functions *)
-let is_space = function
-  | ' ' | '\t' | '\n' | '\r' -> true
-  | _ -> false
-;;
-
-let integer =
-  take_while1 (function
-    | '0' .. '9' -> true
-    | _ -> false)
-  >>| int_of_string
-;;
-
-let is_first_char = function
-  | 'a' .. 'z' | '_' -> true
-  | _ -> false
-;;
-
-let is_varname_char = function
-  | 'a' .. 'z' | 'A' .. 'Z' | '_' | '0' .. '9' -> true
-  | _ -> false
-;;
-
-(* parsers *)
-let spaces = take_while is_space
-let parens p = spaces *> char '(' *> spaces *> p <* spaces <* char ')'
-
-let varname =
-  peek_char_fail
-  >>= fun first ->
-  if is_first_char first
-  then take_while is_varname_char
-  else fail "Parsing error: bad first symbol of id."
-;;
-
-let id_of_expr = function
-  | EIdentifier x -> return x
-  | _ -> failwith "Unreachable"
-;;
-
+(* expression parsers *)
 let literal_p =
   fix
   @@ fun self ->
@@ -92,6 +92,7 @@ let identifier_p =
   let keywords =
     [ "let"
     ; "val"
+    ; "rec"
     ; "case"
     ; "of"
     ; "if"
@@ -201,16 +202,15 @@ let binary_op_p d =
     [ logical_or; logical_and; equality; relational; additive; multiplicative ]
 ;;
 
-let tuple_p d =
+let parse_collection_helper brackets_parser constructor d =
   fix
   @@ fun self ->
   spaces
   *>
-  let brackets parser = spaces *> char '(' *> parser <* char ')' in
   let separator = spaces *> char ',' *> spaces <|> spaces in
   let parse_content =
     choice
-      [ self
+      [ d.tuple_p d
       ; d.unary_op_p d
       ; d.binary_op_p d
       ; d.list_p d
@@ -222,31 +222,17 @@ let tuple_p d =
       ; identifier_p
       ]
   in
-  parens self <|> lift e_tuple @@ brackets @@ many (parse_content <* separator)
+  parens self <|> lift constructor @@ brackets_parser @@ many (parse_content <* separator)
+;;
+
+let tuple_p d =
+  let brackets parser = spaces *> char '(' *> parser <* char ')' in
+  parse_collection_helper brackets e_tuple d
 ;;
 
 let list_p d =
-  fix
-  @@ fun self ->
-  spaces
-  *>
   let brackets parser = spaces *> char '[' *> parser <* char ']' in
-  let separator = spaces *> char ',' *> spaces <|> spaces in
-  let parse_content =
-    choice
-      [ self
-      ; d.unary_op_p d
-      ; d.binary_op_p d
-      ; d.tuple_p d
-      ; d.cons_list_p d
-      ; d.case_of_p d
-      ; d.let_in_p d
-      ; d.application_p d
-      ; literal_p
-      ; identifier_p
-      ]
-  in
-  parens self <|> lift e_list @@ brackets @@ many (parse_content <* separator)
+  parse_collection_helper brackets e_list d
 ;;
 
 let cons_list_p d =
@@ -388,6 +374,41 @@ let application_p d =
   parens self <|> function_parser >>= fun init -> apply_lift init >>= fun init -> go init
 ;;
 
+let parse_value_declaration_helper keyword constructor d =
+  fix
+  @@ fun _ ->
+  spaces
+  *> string keyword
+  *> spaces
+  *>
+  let parse_content =
+    choice
+      [ d.unary_op_p d
+      ; d.binary_op_p d
+      ; d.tuple_p d
+      ; d.list_p d
+      ; d.cons_list_p d
+      ; d.case_of_p d
+      ; d.let_in_p d
+      ; d.application_p d
+      ; d.arrow_fun_p d
+      ; d.if_then_else_p d
+      ; literal_p
+      ; identifier_p
+      ]
+  in
+  lift2
+    constructor
+    (identifier_p
+    >>= id_of_expr
+    >>= fun name ->
+    if name = "_" then fail "Parsing error: wildcard not expected." else return name)
+    (spaces *> string "=" *> parse_content)
+;;
+
+let val_dec_p d = parse_value_declaration_helper "val" e_val_dec d
+let val_rec_dec_p d = parse_value_declaration_helper "val rec" e_val_rec_dec d
+
 let fun_dec_p d =
   fix
   @@ fun _ ->
@@ -418,70 +439,6 @@ let fun_dec_p d =
     >>= fun name ->
     if name = "_" then fail "Parsing error: wildcard not expected." else return name)
     (many (identifier_p >>= id_of_expr))
-    (spaces *> string "=" *> parse_content)
-;;
-
-let val_dec_p d =
-  fix
-  @@ fun _ ->
-  spaces
-  *> string "val"
-  *> spaces
-  *>
-  let parse_content =
-    choice
-      [ d.unary_op_p d
-      ; d.binary_op_p d
-      ; d.tuple_p d
-      ; d.list_p d
-      ; d.cons_list_p d
-      ; d.case_of_p d
-      ; d.let_in_p d
-      ; d.application_p d
-      ; d.arrow_fun_p d
-      ; d.if_then_else_p d
-      ; literal_p
-      ; identifier_p
-      ]
-  in
-  lift2
-    e_val_dec
-    (identifier_p
-    >>= id_of_expr
-    >>= fun name ->
-    if name = "_" then fail "Parsing error: wildcard not expected." else return name)
-    (spaces *> string "=" *> parse_content)
-;;
-
-let val_rec_dec_p d =
-  fix
-  @@ fun _ ->
-  spaces
-  *> string "val rec"
-  *> spaces
-  *>
-  let parse_content =
-    choice
-      [ d.unary_op_p d
-      ; d.binary_op_p d
-      ; d.tuple_p d
-      ; d.list_p d
-      ; d.cons_list_p d
-      ; d.case_of_p d
-      ; d.let_in_p d
-      ; d.application_p d
-      ; d.arrow_fun_p d
-      ; d.if_then_else_p d
-      ; literal_p
-      ; identifier_p
-      ]
-  in
-  lift2
-    e_val_rec_dec
-    (identifier_p
-    >>= id_of_expr
-    >>= fun name ->
-    if name = "_" then fail "Parsing error: wildcard not expected." else return name)
     (spaces *> string "=" *> parse_content)
 ;;
 
