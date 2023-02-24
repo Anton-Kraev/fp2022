@@ -91,6 +91,7 @@ let identifier_p =
   *>
   let keywords =
     [ "let"
+    ; "fun"
     ; "val"
     ; "rec"
     ; "case"
@@ -99,7 +100,6 @@ let identifier_p =
     ; "then"
     ; "else"
     ; "in"
-    ; "fun"
     ; "fn"
     ; "end"
     ; "true"
