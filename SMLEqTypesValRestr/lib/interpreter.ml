@@ -109,9 +109,9 @@ end = struct
       let environment =
         if id <> "_" then update local_environment id eval_argument else local_environment
       in
-      if id_list = []
-      then eval function_body environment
-      else return @@ VFun (id_list, function_body, environment, recursive)
+      (match id_list with
+       | [] -> eval function_body environment
+       | _ -> return @@ VFun (id_list, function_body, environment, recursive))
     | EArrowFun (arguments_list, function_body) ->
       (match arguments_list with
        | [] -> eval function_body environment

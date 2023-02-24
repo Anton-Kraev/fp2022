@@ -41,7 +41,7 @@ let varname =
 
 let id_of_expr = function
   | EIdentifier x -> return x
-  | _ -> failwith "Unreachable"
+  | _ -> fail "Unreachable"
 ;;
 
 (* dispatch for parsers *)
