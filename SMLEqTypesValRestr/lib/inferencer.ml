@@ -92,7 +92,7 @@ module Type = struct
   let free_vars =
     let empty_set = Set.empty (module Int) in
     let rec helper acc = function
-      | TVar n | TEqualityVar n -> Set.add acc n
+      | TVar n -> Set.add acc n
       | TArr (left, right) -> helper (helper acc left) right
       | TTuple typ_list ->
         List.fold_right
@@ -100,7 +100,7 @@ module Type = struct
           ~f:(fun t s -> Set.union s (helper empty_set t))
           ~init:acc
       | TList typ -> helper acc typ
-      | TGround _ -> acc
+      | TGround _ | TEqualityVar _ -> acc
     in
     helper empty_set
   ;;
@@ -284,17 +284,19 @@ let lookup_env e map =
 ;;
 
 let rec find_identifiers = function
-  | EBinaryOp (_, left, right) -> find_identifiers left @ find_identifiers right
+  | EBinaryOp (_, left, right) ->
+    Set.union (find_identifiers left) (find_identifiers right)
   | EUnaryOp (_, operand) -> find_identifiers operand
-  | EApplication (expr1, expr2) -> find_identifiers expr1 @ find_identifiers expr2
+  | EApplication (expr1, expr2) ->
+    Set.union (find_identifiers expr1) (find_identifiers expr2)
   | EList expr_list | ETuple expr_list ->
     List.fold_right
-      ~f:(fun expression acc -> find_identifiers expression @ acc)
-      ~init:[]
+      ~f:(fun expression acc -> Set.union (find_identifiers expression) acc)
+      ~init:(Set.empty (module String))
       expr_list
-  | EConsList (head, tail) -> find_identifiers head @ find_identifiers tail
-  | EIdentifier id -> [ id ]
-  | _ -> []
+  | EConsList (head, tail) -> Set.union (find_identifiers head) (find_identifiers tail)
+  | EIdentifier id -> Set.singleton (module String) id
+  | _ -> Set.empty (module String)
 ;;
 
 let infer =
@@ -388,7 +390,7 @@ let infer =
       let head = List.hd_exn case_list in
       let bootstrap_env env case =
         let identifiers = find_identifiers case in
-        List.fold_right identifiers ~init:(return env) ~f:(fun id acc ->
+        Set.fold_right identifiers ~init:(return env) ~f:(fun id acc ->
           let* fresh_var = fresh_var in
           let+ acc = acc in
           TypeEnv.extend acc id (Set.empty (module Int), fresh_var))
@@ -520,7 +522,7 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  parse_and_inference "fn x y z w => x < y orelse z > w";
+  parse_and_inference "fn x => fn y => fn z => fn w => x < y orelse z > w";
   [%expect {|
     ''e -> ''e -> ''f -> ''f -> bool
   |}]
@@ -528,8 +530,8 @@ let%expect_test _ =
 
 let%expect_test _ =
   parse_and_inference
-    "let val f = fn x y => let val id = (fn x => x) val idid = (id id) in (case idid x \
-     of true => 1) + (case idid y of 1 => 1) end in f false 0 end";
+    "let val f = fn x => fn y => let val id = (fn x => x) val idid = (id id) in (case \
+     idid x of true => 1) + (case idid y of 1 => 1) end in f false 0 end";
   [%expect
     {|
     Value restriction: type of idid cannot be generalized because its declaration is expansive (not a value).
@@ -538,32 +540,34 @@ let%expect_test _ =
 
 let%expect_test _ =
   parse_and_inference
-    "let val f = fn x y => let val id = (fn x => x) val idid = (fn x => id id x) in \
-     (case idid x of true => 1 | _ => 0) + (case idid y of 1 => 1 | _ => 0) end in f \
+    "let val f = fn x => fn y => let val id = (fn x => x) val idid = (fn x => id id x) \
+     in (case idid x of true => 1 | _ => 0) + (case idid y of 1 => 1 | _ => 0) end in f \
      true 1 end";
   [%expect {| int |}]
 ;;
 
 let%expect_test _ =
   parse_and_inference
-    "fn x y f a b => x = y andalso (case a of [] => f b | h :: t => f h) = 0";
+    "fn x => fn y => fn f => fn a => fn b => x = y andalso (case a of [] => f b | h :: t \
+     => f h) = 0";
   [%expect {| ''f -> ''f -> ('h -> int) -> 'h list -> 'h -> bool |}]
 ;;
 
 let%expect_test _ =
   parse_and_inference
-    "fn x y => case y of (a, b) => (~(if a = 'a' then 1 else 0) + (if b = \"b\" then 1 \
-     else 0), x)";
+    "fn x => fn y => case y of (a, b) => (~(if a = 'a' then 1 else 0) + (if b = \"b\" \
+     then 1 else 0), x)";
   [%expect {| 'a -> char * string -> int * 'a |}]
 ;;
 
 let%expect_test _ =
-  parse_and_inference "fn first arr => case arr of [] => false | h::t => h = first";
-  [%expect {| ''f -> ''f list -> bool |}]
+  parse_and_inference
+    "fn first => fn arr => case arr of | h::t => h = first | [] => false";
+  [%expect {| ''h -> ''h list -> bool |}]
 ;;
 
 let%expect_test _ =
-  parse_and_inference "fn x y => x = y orelse y + x";
+  parse_and_inference "fn x => fn y => x = y orelse y + x";
   [%expect
     {| Unification failed: type of the expression is int but expected type was bool |}]
 ;;

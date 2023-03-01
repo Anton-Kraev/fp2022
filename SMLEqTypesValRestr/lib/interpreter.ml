@@ -334,20 +334,20 @@ let%expect_test _ =
 
 let%expect_test _ =
   run_interpreter
-    "let val f = fn x y => let val id = (fn x => x) val idid = (fn x => id id x) in \
-     (case idid x of true => 1 | _ => 0) + (case idid y of 1 => 1 | _ => 0) end in f \
+    "let val f = fn x => fn y => let val id = (fn x => x) val idid = (fn x => id id x) \
+     in (case idid x of true => 1 | _ => 0) + (case idid y of 1 => 1 | _ => 0) end in f \
      true 1 end";
   [%expect {| 2 |}]
 ;;
 
 let%expect_test _ =
   run_interpreter
-    "let val rec f = (fn x y => case x of [] => y | [a] => a::y | h::t => h::(f t y)) in \
-     f [1, 2, 3] [4, 5, 6] end";
+    "let val rec f = (fn x => fn y => case x of [] => y | [a] => a::y | h::t => h::(f t \
+     y)) in f [1, 2, 3] [4, 5, 6] end";
   [%expect {| [1, 2, 3, 4, 5, 6] |}]
 ;;
 
 let%expect_test _ =
-  run_interpreter "let val f = fn x y => [if x < y then y else x] in f 10 100 end";
+  run_interpreter "let val f = fn x => fn y => [if x < y then y else x] in f 10 100 end";
   [%expect {| [100] |}]
 ;;

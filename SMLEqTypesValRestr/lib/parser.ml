@@ -44,6 +44,11 @@ let id_of_expr = function
   | _ -> fail "Unreachable"
 ;;
 
+let id_list_of_expr = function
+  | EIdentifier x -> return [ x ]
+  | _ -> fail "Unreachable"
+;;
+
 (* dispatch for parsers *)
 type dispatch =
   { unary_op_p : dispatch -> Ast.expr Angstrom.t
@@ -467,7 +472,7 @@ let arrow_fun_p d =
   <|> string "fn"
       *> lift2
            e_arrow_fun
-           (many1 (identifier_p >>= id_of_expr) <* spaces <* string "=>" <* spaces)
+           (identifier_p >>= id_list_of_expr <* spaces <* string "=>" <* spaces)
            (parse_content <* spaces)
 ;;
 
@@ -631,8 +636,10 @@ let%test _ =
 ;;
 
 let%test _ =
-  parse_optimistically "fn x y => x <= y"
-  = EArrowFun ([ "x"; "y" ], EBinaryOp (LessOrEq, EIdentifier "x", EIdentifier "y"))
+  parse_optimistically "fn x => fn y => x <= y"
+  = EArrowFun
+      ( [ "x" ]
+      , EArrowFun ([ "y" ], EBinaryOp (LessOrEq, EIdentifier "x", EIdentifier "y")) )
 ;;
 
 let%test _ =
