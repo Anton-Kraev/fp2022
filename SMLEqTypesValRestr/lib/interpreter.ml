@@ -116,10 +116,6 @@ end = struct
       (match arguments_list with
        | [] -> eval function_body environment
        | _ -> return @@ VFun (arguments_list, function_body, environment, NonRecursive))
-    | EFunDec (_, arguments_list, function_body) ->
-      (match arguments_list with
-       | [] -> eval function_body environment
-       | _ -> return @@ VFun (arguments_list, function_body, environment, Recursive))
     | EValDec (_, body) -> eval body environment
     | EValRecDec (_, body) ->
       let* eval_body = eval body environment in

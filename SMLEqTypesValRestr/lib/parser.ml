@@ -59,7 +59,6 @@ type dispatch =
   ; case_of_p : dispatch -> Ast.expr Angstrom.t
   ; let_in_p : dispatch -> Ast.expr Angstrom.t
   ; application_p : dispatch -> Ast.expr Angstrom.t
-  ; fun_dec_p : dispatch -> Ast.expr Angstrom.t
   ; val_dec_p : dispatch -> Ast.expr Angstrom.t
   ; val_rec_dec_p : dispatch -> Ast.expr Angstrom.t
   ; arrow_fun_p : dispatch -> Ast.expr Angstrom.t
@@ -414,39 +413,6 @@ let parse_value_declaration_helper keyword constructor d =
 let val_dec_p d = parse_value_declaration_helper "val" e_val_dec d
 let val_rec_dec_p d = parse_value_declaration_helper "val rec" e_val_rec_dec d
 
-let fun_dec_p d =
-  fix
-  @@ fun _ ->
-  spaces
-  *> string "fun"
-  *> spaces
-  *>
-  let parse_content =
-    choice
-      [ d.unary_op_p d
-      ; d.binary_op_p d
-      ; d.tuple_p d
-      ; d.list_p d
-      ; d.cons_list_p d
-      ; d.case_of_p d
-      ; d.let_in_p d
-      ; d.application_p d
-      ; d.arrow_fun_p d
-      ; d.if_then_else_p d
-      ; literal_p
-      ; identifier_p
-      ]
-  in
-  lift3
-    e_fun_dec
-    (identifier_p
-    >>= id_of_expr
-    >>= fun name ->
-    if name = "_" then fail "Parsing error: wildcard not expected." else return name)
-    (many (identifier_p >>= id_of_expr))
-    (spaces *> string "=" *> parse_content)
-;;
-
 let arrow_fun_p d =
   fix
   @@ fun self ->
@@ -517,7 +483,6 @@ let expr_p d =
     ; d.case_of_p d
     ; d.let_in_p d
     ; d.application_p d
-    ; d.fun_dec_p d
     ; d.val_dec_p d
     ; d.val_rec_dec_p d
     ; d.arrow_fun_p d
@@ -537,7 +502,6 @@ let default_d =
   ; case_of_p
   ; let_in_p
   ; application_p
-  ; fun_dec_p
   ; val_dec_p
   ; val_rec_dec_p
   ; arrow_fun_p
@@ -606,11 +570,6 @@ let%test _ =
 let%test _ =
   parse_optimistically "f (x y)"
   = EApplication (EIdentifier "f", EApplication (EIdentifier "x", EIdentifier "y"))
-;;
-
-let%test _ =
-  parse_optimistically "fun f x y = x orelse y"
-  = EFunDec ("f", [ "x"; "y" ], EBinaryOp (Or, EIdentifier "x", EIdentifier "y"))
 ;;
 
 let%test _ =

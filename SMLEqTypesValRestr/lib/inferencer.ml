@@ -440,7 +440,6 @@ let infer =
       let result_type = Subst.apply subst' type_variable in
       let+ final_subst = Subst.compose_all [ left_subst; right_subst; subst' ] in
       final_subst, result_type
-    | EFunDec (_, args, body) -> helper env @@ EArrowFun (args, body)
     | EValDec (id, body) | EValRecDec (id, body) ->
       let rec is_syntactically_value = function
         | EArrowFun _ | EIdentifier _ | ELiteral _ -> true
@@ -515,7 +514,7 @@ let%expect_test _ =
 ;;
 
 let%expect_test _ =
-  parse_and_inference "fun id x = x";
+  parse_and_inference "val id = fn x => x";
   [%expect {|
     'a -> 'a
   |}]

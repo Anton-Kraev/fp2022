@@ -52,7 +52,6 @@ type expr =
                                     a + b
                                   end *)
   | EApplication of expr * expr (* f x *)
-  | EFunDec of id * id list * expr (* fun f x y = x + y *)
   | EValDec of id * expr (* val x = 88 *)
   | EValRecDec of
       id
@@ -72,7 +71,6 @@ let e_cons_list head tail = EConsList (head, tail)
 let e_case_of expression cases = ECaseOf (expression, cases)
 let e_let_in declarations body = ELetIn (declarations, body)
 let e_application func args = EApplication (func, args)
-let e_fun_dec func_id args_id body = EFunDec (func_id, args_id, body)
 let e_val_dec value_id expression = EValDec (value_id, expression)
 let e_val_rec_dec value_id expression = EValRecDec (value_id, expression)
 let e_arrow_fun args_id expression = EArrowFun (args_id, expression)
