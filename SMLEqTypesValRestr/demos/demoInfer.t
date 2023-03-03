@@ -45,3 +45,11 @@ Errors
   > (case idid x of true => 1 | _ => 0) + (case idid y of 1 => 1 | _ => 0) end
   > in f true 1 end
   Value restriction: type of idid cannot be generalized because its declaration is expansive (not a value). 
+Trying to break unification of `a and ``a
+  $ ./demoInfer.exe << EOF
+  > let val eqq = fn x => fn y => x=y 
+  >     val foo = fn eq => fn x => fn y => eq x y
+  > end in
+  > fn eta => foo eq1 eta
+
+
