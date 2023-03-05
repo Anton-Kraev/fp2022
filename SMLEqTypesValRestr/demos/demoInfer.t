@@ -42,6 +42,6 @@ Errors
   No such variable: y
   $ ./demoInfer.exe << EOF
   > let val f = fn x => fn y => let val id = (fn x => x) val idid = (id id) in
-  > (case idid x of true => 1 | _ => 0) + (case idid y of 1 => 1 | _ => 0) end
-  > in f true 1 end
-  Value restriction: type of idid cannot be generalized because its declaration is expansive (not a value). 
+  > (case idid x of 1 => 1 | _ => 0) + (case idid y of true => 1 | _ => 0) end
+  > in f 1 true end
+  Unification failed: type of the expression is bool but expected type was int

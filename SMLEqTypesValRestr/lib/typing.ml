@@ -41,9 +41,6 @@ type error =
   [ `OccursCheck (** Occurs check fail *)
   | `NoVariable of identifier (** Use of undefined variable *)
   | `UnificationFailed of typ * typ (** Expression of a different type was expected *)
-  | `ValueRestriction of identifier
-    (** The inability to make <id> polymorphic, type of <id> cannot be
-         generalized because its declaration is expansive (not a value). *)
   | `Unreachable
     (** Unreachable code. If this error is thrown then there is a bug in parser *)
   ]
@@ -93,12 +90,6 @@ let pp_error fmt (err : error) =
     pp_type fmt t1;
     fprintf fmt " but expected type was ";
     pp_type fmt t2
-  | `ValueRestriction identifier ->
-    fprintf
-      fmt
-      "Value restriction: type of %s cannot be generalized because its declaration is \
-       expansive (not a value). "
-      identifier
   | `Unreachable -> fprintf fmt "Not reachable."
 ;;
 

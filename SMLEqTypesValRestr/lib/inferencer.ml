@@ -299,6 +299,16 @@ let rec find_identifiers = function
   | _ -> Set.empty (module String)
 ;;
 
+let rec is_syntactically_value = function
+  | EArrowFun _ | EIdentifier _ | ELiteral _ -> true
+  | EList elems | ETuple elems ->
+    (match elems with
+     | [] -> true
+     | [ x ] -> is_syntactically_value x
+     | h :: t -> is_syntactically_value h && (is_syntactically_value @@ EList t))
+  | _ -> false
+;;
+
 let infer =
   let rec helper : TypeEnv.t -> expr -> (Subst.t * typ) R.t =
    fun env -> function
@@ -413,18 +423,23 @@ let infer =
       let rec process_list subst env = function
         | [] -> return (subst, env)
         | elem :: tail ->
-          let* identifier =
+          let* identifier, body =
             match elem with
-            | EValDec (id, _) | EValRecDec (id, _) -> return id
+            | EValDec (id, body) | EValRecDec (id, body) -> return (id, body)
             | _ -> fail `Unreachable
           in
           let* fresh_var = fresh_var in
           let env' = TypeEnv.extend env identifier (Set.empty (module Int), fresh_var) in
           let* elem_subst, elem_type = helper env' elem in
           let env'' = TypeEnv.apply elem_subst env' in
-          let generalized_type = generalize env'' elem_type in
-          let* subst'' = Subst.compose subst elem_subst in
-          process_list subst'' (TypeEnv.extend env'' identifier generalized_type) tail
+          let generalized_type =
+            if is_syntactically_value body
+            then generalize env'' elem_type
+            else TypeEnv.free_vars env'', elem_type
+          in
+          let* subst' = Subst.compose subst elem_subst in
+          let env''' = TypeEnv.extend env'' identifier generalized_type in
+          process_list subst' env''' tail
       in
       let* subst', env' = process_list Subst.empty env bindings_list in
       let* subst_expr, typ_expr = helper env' expression in
@@ -440,20 +455,7 @@ let infer =
       let result_type = Subst.apply subst' type_variable in
       let+ final_subst = Subst.compose_all [ left_subst; right_subst; subst' ] in
       final_subst, result_type
-    | EValDec (id, body) | EValRecDec (id, body) ->
-      let rec is_syntactically_value = function
-        | EArrowFun _ | EIdentifier _ | ELiteral _ -> true
-        | EList elems | ETuple elems ->
-          (match elems with
-           | [] -> true
-           | [ x ] -> is_syntactically_value x
-           | h :: t -> is_syntactically_value h && (is_syntactically_value @@ EList t))
-        | _ -> false
-      in
-      let* body =
-        if is_syntactically_value body then return body else fail @@ `ValueRestriction id
-      in
-      helper env @@ EArrowFun ([], body)
+    | EValDec (_, body) | EValRecDec (_, body) -> helper env @@ EArrowFun ([], body)
     | EArrowFun (args, body) ->
       (match args with
        | [] -> helper env body
@@ -533,7 +535,7 @@ let%expect_test _ =
      idid x of true => 1) + (case idid y of 1 => 1) end in f false 0 end";
   [%expect
     {|
-    Value restriction: type of idid cannot be generalized because its declaration is expansive (not a value).
+    Unification failed: type of the expression is int but expected type was bool
   |}]
 ;;
 
