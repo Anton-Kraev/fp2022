@@ -58,7 +58,7 @@ let pp_error fmt (err : error) =
     fprintf
       fmt
       "This code is supposed to be unreachable. If this error is thrown then there is a \
-       bug in typechecker."
+       bug in typechecker. "
   | `UnsupportedOperation -> fprintf fmt "Runtime error: unsupported operation."
   | `DivisionByZero -> fprintf fmt "Runtime error: division by zero."
   | `MisusedWildcard ->
