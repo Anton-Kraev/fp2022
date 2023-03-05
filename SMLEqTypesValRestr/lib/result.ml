@@ -21,11 +21,9 @@ and value =
 type error =
   [ `UnboundValue of string (** Unbound value *)
   | `Unreachable
-    (** Unreachable code. If this error is thrown then something went seriously wrong *)
+    (** Unreachable code. If this error is thrown then there is a bug in typechecker *)
   | `UnsupportedOperation (** Used unsupported operation *)
   | `DivisionByZero (** n / 0*)
-  | `NotAFunction (** Unreachable when type inference is used *)
-  | `TypeMismatch (** Unreachable when type inference is used *)
   | `MisusedWildcard (** Wildcard is in the right-hand expression *)
   | `PatternMatchingFailed (** The case is not matched *)
   | `NonExhaustivePatternMatching (** Pattern-matching is not exhaustive *)
@@ -59,13 +57,10 @@ let pp_error fmt (err : error) =
   | `Unreachable ->
     fprintf
       fmt
-      "This code is supposed to be unreachable. If you got this error, something must \
-       have gone seriously wrong."
+      "This code is supposed to be unreachable. If this error is thrown then there is a \
+       bug in typechecker."
   | `UnsupportedOperation -> fprintf fmt "Runtime error: unsupported operation."
   | `DivisionByZero -> fprintf fmt "Runtime error: division by zero."
-  | `NotAFunction ->
-    fprintf fmt "Runtime error: this is not a function, it cannot be applied."
-  | `TypeMismatch -> fprintf fmt "Runtime error: mismatching types."
   | `MisusedWildcard ->
     fprintf
       fmt

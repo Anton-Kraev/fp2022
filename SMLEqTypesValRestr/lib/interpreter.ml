@@ -60,11 +60,11 @@ end = struct
        | Mult, VInt x, VInt y -> return @@ VInt (x * y)
        | Div, VInt x, VInt y ->
          if y = 0 then fail `DivisionByZero else return @@ VInt (x / y)
-       | (Add | Sub | Mult | Div), _, _ -> fail `TypeMismatch
+       | (Add | Sub | Mult | Div), _, _ -> fail `Unreachable
        (* Logical operations *)
        | And, VBool x, VBool y -> return @@ VBool (x && y)
        | Or, VBool x, VBool y -> return @@ VBool (x || y)
-       | (And | Or), _, _ -> fail `TypeMismatch
+       | (And | Or), _, _ -> fail `Unreachable
        (* Equality operations *)
        | op, arg1, arg2 ->
          let comparison_operation : 'a. 'a -> 'a -> bool =
@@ -99,12 +99,12 @@ end = struct
         match eval_function with
         | VFun (id_list, function_body, environment, recursive) ->
           return (id_list, function_body, environment, recursive)
-        | _ -> fail `NotAFunction
+        | _ -> fail `Unreachable
       in
       let* id, id_list =
         match id_list with
         | head :: tail -> return (head, tail)
-        | _ -> fail `NotAFunction
+        | _ -> fail `Unreachable
       in
       let environment =
         if id <> "_" then update local_environment id eval_argument else local_environment
@@ -128,13 +128,13 @@ end = struct
       (match eval_conditional with
        | VBool true -> eval true_branch environment
        | VBool false -> eval false_branch environment
-       | _ -> fail `TypeMismatch)
+       | _ -> fail `Unreachable)
     | EUnaryOp (operator, operand) ->
       let* operand = eval operand environment in
       (match operator, operand with
        | Neg, VInt x -> return @@ VInt (-x)
        | Not, VBool x -> return @@ VBool (not x)
-       | _ -> fail `TypeMismatch)
+       | _ -> fail `Unreachable)
     | EList list ->
       (match list with
        | [] -> return @@ VList []
@@ -157,7 +157,7 @@ end = struct
       let* list = eval list environment in
       (match operand, list with
        | x, VList list -> return @@ VList (x :: list)
-       | _ -> fail `TypeMismatch)
+       | _ -> fail `Unreachable)
     | ETuple list ->
       let* list = foldr (fun x xs -> x :: xs) [] list in
       return @@ VTuple list
