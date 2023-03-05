@@ -339,7 +339,7 @@ let let_in_p d =
       *> take_while1 is_space
       *> lift2
            e_let_in
-           (sep_by1 (take_while1 is_space) (d.val_dec_p d <|> d.val_rec_dec_p d))
+           (many1 (d.val_dec_p d <|> d.val_rec_dec_p d))
            (spaces *> string "in" *> parse_content <* spaces <* string "end")
 ;;
 
